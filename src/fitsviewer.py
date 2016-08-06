@@ -1,21 +1,24 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# * Copyright (c) 2014 Sven Brauch <mail@svenbrauch.de>                       *
-# * Copyright (c) 2016 Benjamin Winkel <>                                     *
-# *                                                                           *
-# * This program is free software; you can redistribute it and/or             *
-# * modify it under the terms of the GNU General Public License as            *
-# * published by the Free Software Foundation; either version 2 of            *
-# * the License, or (at your option) any later version.                       *
-# *                                                                           *
-# * This program is distributed in the hope that it will be useful,           *
-# * but WITHOUT ANY WARRANTY; without even the implied warranty of            *
-# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
-# * GNU General Public License for more details.                              *
-# *                                                                           *
-# * You should have received a copy of the GNU General Public License         *
-# * along with this program.  If not, see <http://www.gnu.org/licenses/>.     *
+# ####################################################################
+#  Copyright (C) 2014+ by Sven Brauch and Benjamin Winkel
+#                         <mail@svenbrauch.de>, <bwinkel@mpifr.de>
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# ####################################################################
 
 from __future__ import absolute_import
 from __future__ import division
@@ -31,29 +34,25 @@ API_VERSION = 2
 for name in API_NAMES:
     sip.setapi(name, API_VERSION)
 
-from PyQt4 import QtCore, QtGui
+from PyQt4 import QtCore, QtGui, uic
 from PyQt4.QtCore import Qt
 
 import os
 import sys
-if sys.version_info >= (3, 0):
-    from mainwindow_form3 import Ui_MainWindow
-    from plotwindow_form3 import Ui_Dialog
-else:
-    from mainwindow_form import Ui_MainWindow
-    from plotwindow_form import Ui_Dialog
-
 from matplotlib.backends.backend_qt4agg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar
     )
 
 from matplotlib.figure import Figure
-
-from astropy.io import fits as pyfits
 import matplotlib.pyplot as plt
 import matplotlib
+from astropy.io import fits as pyfits
 import numpy as np
+
+
+__all__ = ['FitsViewer', 'start_fitsviewer']
+
 
 RAW_DATA_ROLE = Qt.UserRole + 1
 
@@ -114,8 +113,11 @@ class PlotWindow(QtGui.QDialog):
 
         super(PlotWindow, self).__init__(parent)
 
-        self.ui = Ui_Dialog()
-        self.ui.setupUi(self)
+        self.ui = uic.loadUi(
+            os.path.join(os.path.dirname(__file__), 'forms/plotwindow.ui'),
+            self
+            )
+
         self.canvas = MatplotlibCanvas(self)
         self.ui.plotContainer.addWidget(self.canvas)
 
@@ -139,6 +141,8 @@ class PlotWindow(QtGui.QDialog):
         self.on_layout_selected(0)
 
         self.setWindowTitle('pyfv: plot selection')
+
+        self.ui.show()
 
     def reset(self):
 
@@ -421,8 +425,10 @@ class FitsViewer(QtGui.QMainWindow):
 
         super(FitsViewer, self).__init__(parent)
 
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
+        self.ui = uic.loadUi(
+            os.path.join(os.path.dirname(__file__), 'forms/mainwindow.ui'),
+            self
+            )
 
         self.current_file = None
         self._do_read_settings = True
@@ -467,10 +473,6 @@ class FitsViewer(QtGui.QMainWindow):
         self.ui.header.setStyleSheet('QTableView::item { padding: 8px }')
         self.ui.contents.setStyleSheet('QTableView::item { padding: 8px }')
 
-        # self.ui.splitter.setSizes([200, 500])
-        # self.ui.splitter_2.setSizes([200, 500])
-        # self.ui.splitter_3.setSizes([200, 500])
-
         menu = QtGui.QMenu()
 
         for action_name, action_args in PLOT_ACTIONS:
@@ -502,6 +504,8 @@ class FitsViewer(QtGui.QMainWindow):
         self.data_filter_timer.timeout.connect(self.change_data_filter)
 
         self.active_plot_window = None
+
+        self.ui.show()
 
     def on_indices_toggled(self, state):
 
@@ -755,6 +759,10 @@ class FitsViewer(QtGui.QMainWindow):
     def closeEvent(self, event):
 
         self.write_settings()
+        try:
+            self.active_plot_window.close()
+        except AttributeError:
+            pass
         super(FitsViewer, self).closeEvent(event)
 
     def write_settings(self):
@@ -762,7 +770,7 @@ class FitsViewer(QtGui.QMainWindow):
         Store settings (including layout and window geometry).
         '''
 
-        settings = QtCore.QSettings('RadioTeleskopEffelsberg', 'pyfv')
+        settings = QtCore.QSettings('pyfv', 'pyfv')
         settings.setValue(
             'splitter/splitterSizes', self.ui.splitter.saveState()
             )
@@ -780,7 +788,7 @@ class FitsViewer(QtGui.QMainWindow):
         Read stored settings (including layout and window geometry).
         '''
 
-        settings = QtCore.QSettings('RadioTeleskopEffelsberg', 'pyfv')
+        settings = QtCore.QSettings('pyfv', 'pyfv')
 
         self.ui.splitter.restoreState(settings.value('splitter/splitterSizes'))
         self.ui.splitter_2.restoreState(
@@ -802,13 +810,23 @@ class FitsViewer(QtGui.QMainWindow):
         super(FitsViewer, self).showEvent(se)
 
         if self._do_read_settings:
-            self.read_settings()
+            try:
+                self.read_settings()
+            except TypeError:
+                # probably settings file not (yet) present
+                pass
             self._do_read_settings = False
 
 
-if __name__ == '__main__':
+def start_fitsviewer():
 
     app = QtGui.QApplication(sys.argv)
     window = FitsViewer()
     window.show()
     app.exec_()
+
+
+if __name__ == '__main__':
+
+    print('this is a library module')
+    sys.exit(1)
