@@ -12,7 +12,9 @@ setup(
     description=(
         'pyfitsviewer: a GUI to inspect FITS files, similar to fv'
         ),
-    scripts=['pyfv'],
+    entry_points={
+        'gui_scripts': ['pyfv = pyfitsviewer.__main__:main']
+        },
     install_requires=[
         'setuptools',
         'numpy>=1.8',
